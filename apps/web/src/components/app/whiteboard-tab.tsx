@@ -207,8 +207,17 @@ function WhiteboardCanvas({
       excalidrawAPI.updateScene({
         elements: remote.scene.elements as ExcalidrawElement[],
       });
+      setBoardEmpty(remote.scene.elements.length === 0);
+      // Agent edits happen server-side where no PNG can be rendered; this
+      // client just became the renderer — refresh the agent-facing snapshot.
+      if (snapshotTimerRef.current !== undefined) {
+        window.clearTimeout(snapshotTimerRef.current);
+      }
+      snapshotTimerRef.current = window.setTimeout(() => {
+        void persistSnapshot();
+      }, SNAPSHOT_DEBOUNCE_MS);
     },
-    [excalidrawAPI]
+    [excalidrawAPI, persistSnapshot]
   );
 
   // Apply remote (agent/SSE-driven) updates; defer while a gesture is live.
@@ -252,6 +261,9 @@ function WhiteboardCanvas({
       }
       if (snapshotTimerRef.current !== undefined) {
         window.clearTimeout(snapshotTimerRef.current);
+        // Flush like the save timer: exportToBlob renders offscreen from
+        // scene data, so it still works during teardown.
+        void persistSnapshot();
       }
     };
     // persistScene is stable per agent/api instance; run cleanup once.
